@@ -20,7 +20,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.20'
+        go-version: '1.23'
 
     - name: Install Android NDK
       run: |
@@ -57,6 +57,7 @@ jobs:
             export CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang
             ;;
         esac
+        go mod download
         go build -o frpc_${{ matrix.arch }} ./cmd/frpc
         go build -o frps_${{ matrix.arch }} ./cmd/frps
 
