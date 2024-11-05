@@ -1,4 +1,4 @@
-name: Build FRP for Android
+name: Build FRP
 
 on:
   push:
@@ -12,7 +12,33 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        arch: [arm64-v8a, armeabi-v7a, x86, x86_64]
+        include:
+          # Android builds
+          - os: android
+            arch: arm64-v8a
+            goarch: arm64
+            cc: aarch64-linux-android21-clang
+          - os: android
+            arch: armeabi-v7a
+            goarch: arm
+            cc: armv7a-linux-androideabi21-clang
+          - os: android
+            arch: x86
+            goarch: 386
+            cc: i686-linux-android21-clang
+          - os: android
+            arch: x86_64
+            goarch: amd64
+            cc: x86_64-linux-android21-clang
+          # Windows build
+          - os: windows
+            arch: x86_64
+            goarch: amd64
+            extension: .exe
+          # Linux build
+          - os: linux
+            arch: x86_64
+            goarch: amd64
 
     steps:
     - uses: actions/checkout@v3
@@ -23,6 +49,7 @@ jobs:
         go-version: '1.23'
 
     - name: Install Android NDK
+      if: matrix.os == 'android'
       run: |
         wget https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
         unzip android-ndk-r25c-linux.zip
@@ -34,37 +61,31 @@ jobs:
         echo "GOPATH=$HOME/go" >> $GITHUB_ENV
         echo "$HOME/go/bin" >> $GITHUB_PATH
 
-    - name: Build FRP for Android
+    - name: Build FRP
       env:
-        GOOS: android
         CGO_ENABLED: 1
       run: |
-        case ${{ matrix.arch }} in
-          arm64-v8a)
-            export GOARCH=arm64
-            export CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang
-            ;;
-          armeabi-v7a)
-            export GOARCH=arm
-            export CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang
-            ;;
-          x86)
-            export GOARCH=386
-            export CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android21-clang
-            ;;
-          x86_64)
-            export GOARCH=amd64
-            export CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang
-            ;;
-        esac
+        if [ "${{ matrix.os }}" = "android" ]; then
+          export GOOS=android
+          export GOARCH=${{ matrix.goarch }}
+          export CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/${{ matrix.cc }}
+        elif [ "${{ matrix.os }}" = "windows" ]; then
+          export GOOS=windows
+          export GOARCH=${{ matrix.goarch }}
+          export CGO_ENABLED=0
+        else
+          export GOOS=linux
+          export GOARCH=${{ matrix.goarch }}
+        fi
+        
         go mod download
-        go build -o frpc_${{ matrix.arch }} ./cmd/frpc
-        go build -o frps_${{ matrix.arch }} ./cmd/frps
+        go build -o frpc_${{ matrix.arch }}${{ matrix.extension || '' }} ./cmd/frpc
+        go build -o frps_${{ matrix.arch }}${{ matrix.extension || '' }} ./cmd/frps
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
       with:
-        name: frp-android-${{ matrix.arch }}
+        name: frp-${{ matrix.os }}-${{ matrix.arch }}
         path: |
-          frpc_${{ matrix.arch }}
-          frps_${{ matrix.arch }}
+          frpc_${{ matrix.arch }}${{ matrix.extension || '' }}
+          frps_${{ matrix.arch }}${{ matrix.extension || '' }}
